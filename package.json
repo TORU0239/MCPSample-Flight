@@ -1,0 +1,59 @@
+{
+  "name": "flight-search-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for natural language flight search",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/presentation/api/server.ts",
+    "dev:mcp": "tsx watch src/infrastructure/mcp/mcp-server.ts",
+    "build": "tsc && tsc-alias",
+    "start": "node dist/presentation/api/server.js",
+    "start:mcp": "node dist/infrastructure/mcp/mcp-server.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "compression": "^1.7.4",
+    "dotenv": "^16.3.1",
+    "zod": "^3.22.4",
+    "date-fns": "^3.0.0",
+    "axios": "^1.6.2",
+    "redis": "^4.6.11",
+    "winston": "^3.11.0",
+    "amadeus": "^7.0.0",
+    "openai": "^4.20.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/express": "^4.17.21",
+    "@types/cors": "^2.8.17",
+    "@types/compression": "^1.7.5",
+    "@types/jest": "^29.5.8",
+    "typescript": "^5.3.2",
+    "tsx": "^4.6.0",
+    "tsc-alias": "^1.8.8",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "eslint": "^8.54.0",
+    "@typescript-eslint/eslint-plugin": "^6.12.0",
+    "@typescript-eslint/parser": "^6.12.0",
+    "prettier": "^3.1.0"
+  },
+  "keywords": [
+    "mcp",
+    "flight-search",
+    "nlp",
+    "ai",
+    "travel"
+  ],
+  "author": "Wonyoung Choi (Toru)",
+  "license": "MIT"
+}
