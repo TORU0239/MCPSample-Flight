@@ -1,3 +1,6 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import type { ChatMessage } from "./types.js";
@@ -56,6 +59,8 @@ export async function chat(messages: ChatMessage[]): Promise<string> {
 }
 
 export function validateLLMConfig(): void {
+  console.log(`✅ LLM 프로바이더: ${PROVIDER}, apikey: ${process.env[`${PROVIDER.toUpperCase()}_API_KEY`] ? "설정됨" : "없음"}`);
+
   if (PROVIDER === "anthropic" && !anthropic) {
     throw new Error("ANTHROPIC_API_KEY가 설정되지 않았습니다.");
   }

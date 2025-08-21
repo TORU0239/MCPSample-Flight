@@ -50,6 +50,10 @@ async function searchFlightsAmadeus(params: SearchFlightParams): Promise<FlightS
   const token = await getAccessToken();
 
   const url = new URL("https://test.api.amadeus.com/v2/shopping/flight-offers");
+  
+  console.log(`🔍 Amadeus 항공편 검색: ${params.origin} -> ${params.destination}, 출발: ${params.departDate}, 왕복: ${params.returnDate || "없음"}`);
+
+
   url.searchParams.set("originLocationCode", params.origin);
   url.searchParams.set("destinationLocationCode", params.destination);
   url.searchParams.set("departureDate", params.departDate);

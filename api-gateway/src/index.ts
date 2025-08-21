@@ -13,6 +13,7 @@ import type {
   TravelCard,
 } from "./types.js";
 
+console.log("🔧 API Gateway 시작 중...");
 dotenv.config();
 validateLLMConfig();
 
