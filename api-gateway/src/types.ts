@@ -1,4 +1,5 @@
-// API Gateway 타입 정의
+// api-gateway/src/types.ts
+
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;

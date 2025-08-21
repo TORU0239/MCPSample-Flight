@@ -13,14 +13,10 @@ import type {
   TravelCard,
 } from "./types.js";
 
-// 환경 변수 로드
 dotenv.config();
-
-// LLM 설정 검증
 validateLLMConfig();
 
 async function main() {
-  // Fastify 인스턴스 생성
   const fastify = Fastify({
     logger: {
       level: process.env.NODE_ENV === "production" ? "info" : "debug",
@@ -35,26 +31,17 @@ async function main() {
     },
   });
 
-  // ===== 미들웨어 설정 =====
-
-  // CORS
   await fastify.register(cors, {
-    origin: true, // 프로덕션에서는 특정 도메인만 허용하세요
+    origin: true,
     credentials: true,
   });
 
-  // Rate Limiting
   await fastify.register(rateLimit, {
     max: 100,
     timeWindow: "1 minute",
-    hook: "onRequest", // Fastify 5에서 추천하는 방식
+    hook: "onRequest",
   });
 
-  // ===== 라우트 정의 =====
-
-  /**
-   * 헬스 체크
-   */
   fastify.get("/health", async () => ({
     status: "ok",
     service: "api-gateway",
@@ -65,10 +52,6 @@ async function main() {
     },
   }));
 
-  /**
-   * 위치 검색 (IATA 코드 찾기)
-   * GET /locations?term=Seoul&limit=5
-   */
   fastify.get<{
     Querystring: { term?: string; limit?: string };
   }>("/locations", async (request, reply) => {
@@ -87,14 +70,9 @@ async function main() {
     }
   });
 
-  /**
-   * 직접 항공편 검색 (LLM 없이)
-   * POST /search-flights
-   */
   fastify.post<{
     Body: FlightSearchRequest;
   }>("/search-flights", async (request, reply) => {
-    // 입력 검증
     const schema = z.object({
       origin: z.string().min(3).max(10),
       destination: z.string().min(3).max(10),
@@ -126,10 +104,6 @@ async function main() {
     }
   });
 
-  /**
-   * 대화형 채팅 엔드포인트
-   * POST /chat
-   */
   fastify.post<{
     Body: ChatRequest;
   }>("/chat", async (request, reply) => {
@@ -140,7 +114,6 @@ async function main() {
     }
 
     try {
-      // Step 1: 의도 파악
       const intentPrompt = `
 You are a travel assistant. Analyze the user's message and determine their intent.
 
@@ -167,14 +140,12 @@ Do NOT include any text outside the JSON when intent is search_flights.`;
       let flights = null;
       let cards: TravelCard[] = [];
 
-      // Step 2: 항공편 검색 의도인 경우
       try {
         const parsed = JSON.parse(intentResponse) as FlightIntent;
 
         if (parsed?.intent === "search_flights") {
           request.log.info({ parsed }, "항공편 검색 요청 감지");
 
-          // MCP를 통한 항공편 검색
           flights = await searchFlightsViaMCP({
             origin: parsed.origin,
             destination: parsed.destination,
@@ -185,7 +156,6 @@ Do NOT include any text outside the JSON when intent is search_flights.`;
             currency: parsed.currency || "USD",
           });
 
-          // Step 3: 검색 결과 요약
           if (flights && flights.items?.length > 0) {
             const summaryPrompt = `
 Summarize these flight search results in a friendly, concise way for a mobile chat interface.
@@ -197,7 +167,6 @@ Be conversational and helpful.`;
               { role: "user", content: JSON.stringify(flights) },
             ]);
 
-            // Step 4: 여행 정보 카드 생성
             const cardsPrompt = `
 Create 3 travel info cards for ${parsed.destination}.
 Return ONLY a JSON array with this structure:
@@ -226,12 +195,10 @@ Return ONLY a JSON array with this structure:
             assistantMessage = "죄송합니다, 해당 조건의 항공편을 찾을 수 없습니다. 날짜나 목적지를 조정해보시겠어요?";
           }
         }
-      } catch (parseError) {
-        // JSON 파싱 실패 = 일반 대화
+      } catch {
         request.log.debug("일반 대화 모드");
       }
 
-      // 응답 생성
       const response: ChatResponse = {
         message: assistantMessage,
         flights,
@@ -248,24 +215,15 @@ Return ONLY a JSON array with this structure:
     }
   });
 
-  // ===== 서버 시작 =====
   const PORT = Number(process.env.PORT || 8787);
   const HOST = "0.0.0.0";
 
   try {
     await fastify.listen({ port: PORT, host: HOST });
-
     console.log("=".repeat(50));
-    console.log(`🚀 API Gateway 시작됨`);
-    console.log(`📍 URL: http://localhost:${PORT}`);
+    console.log(`🚀 API Gateway 시작됨 - http://localhost:${PORT}`);
     console.log(`🤖 LLM: ${process.env.LLM_PROVIDER}`);
     console.log(`🛫 Flight Server: ${process.env.FLIGHT_SERVER_URL || "http://localhost:8700"}`);
-    console.log("=".repeat(50));
-    console.log("\n📝 사용 가능한 엔드포인트:");
-    console.log("  GET  /health");
-    console.log("  GET  /locations?term=Seoul");
-    console.log("  POST /search-flights");
-    console.log("  POST /chat");
     console.log("=".repeat(50));
   } catch (err) {
     fastify.log.error(err);
