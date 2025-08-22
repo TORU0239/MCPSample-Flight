@@ -1,13 +1,15 @@
-import express, { Request, Response, NextFunction } from "express";
-import cors from "cors";
+// src/mcp/index.ts
+
+import Fastify from "fastify";
+import cors from "@fastify/cors";
 import dotenv from "dotenv";
-import type { FlightOffer, FlightSearchResult, SearchFlightParams, AmadeusFlightSearchResponse } from "./types.js";
+import type { SearchFlightParams, FlightSearchResult } from "./types.js";
 
 dotenv.config();
 
 const AMADEUS_CLIENT_ID = process.env.AMADEUS_CLIENT_ID || "";
 const AMADEUS_CLIENT_SECRET = process.env.AMADEUS_CLIENT_SECRET || "";
-const PORT = process.env.PORT ? Number(process.env.PORT) : 8700;
+const PORT = process.env.PORT ? Number(process.env.PORT) : 8787;
 
 if (!AMADEUS_CLIENT_ID || !AMADEUS_CLIENT_SECRET) {
   console.error("❌ [ERROR] AMADEUS_CLIENT_ID 또는 AMADEUS_CLIENT_SECRET이 설정되지 않았습니다.");
@@ -40,20 +42,18 @@ async function getAccessToken(): Promise<string> {
     throw new Error(`Amadeus OAuth 에러: ${res.status} ${errBody}`);
   }
 
-  const json = await res.json() as { access_token: string; expires_in: number };
+  const json = (await res.json()) as { access_token: string; expires_in: number };
   accessToken = json.access_token;
   tokenExpiresAt = now + (json.expires_in - 60) * 1000;
   return accessToken;
 }
 
 async function searchFlightsAmadeus(params: SearchFlightParams): Promise<FlightSearchResult> {
+  console.log("🔍 Amadeus 항공편 검색 요청:", params, new Date().toISOString());
+
   const token = await getAccessToken();
 
   const url = new URL("https://test.api.amadeus.com/v2/shopping/flight-offers");
-  
-  console.log(`🔍 Amadeus 항공편 검색: ${params.origin} -> ${params.destination}, 출발: ${params.departDate}, 왕복: ${params.returnDate || "없음"}`);
-
-
   url.searchParams.set("originLocationCode", params.origin);
   url.searchParams.set("destinationLocationCode", params.destination);
   url.searchParams.set("departureDate", params.departDate);
@@ -64,60 +64,92 @@ async function searchFlightsAmadeus(params: SearchFlightParams): Promise<FlightS
   url.searchParams.set("currencyCode", params.currency ?? "USD");
   url.searchParams.set("max", "20");
 
+  console.log("🔍 Amadeus API parameters: ", url.searchParams);
+
   const res = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${token}` },
   });
 
   if (!res.ok) {
     const errBody = await res.text();
+    console.log("🔴 Amadeus API 호출 실패:", new Date().toISOString());
     throw new Error(`Amadeus Flight API 에러: ${res.status} ${errBody}`);
   }
 
-  const json = await res.json() as AmadeusFlightSearchResponse;
-  const items: FlightOffer[] = json.data ?? [];
+  const json = (await res.json()) as { data?: any[] };
+  const items = json.data ?? [];
+
+  console.log("🔍 Amadeus 항공편 검색 결과:", items.length, "개 항공편");
+
   return { currency: params.currency ?? "USD", items };
 }
 
-const app = express();
+const app = Fastify();
 
-app.use(express.json());
-app.use(cors({ origin: true }));
+app.register(cors, { origin: true });
 
-app.use((req: Request, _res: Response, next: NextFunction) => {
-  console.log(`📝 ${new Date().toISOString()} - ${req.method} ${req.path}`);
-  next();
-});
+// MCP 서버 기본 경로 (이전 마이그레이션한 MCP 메시지 방식)
+app.post("/mcp", async (request, reply) => {
+  console.log("🔧 /mcp, MCP Flight Server 요청 수신:", request.body, new Date().toISOString());
 
-app.get("/health", (_req, res) =>
-  res.json({
-    status: "ok",
-    service: "flight-server-amadeus",
-    timestamp: new Date().toISOString(),
-    clientIdConfigured: !!AMADEUS_CLIENT_ID,
-  }),
-);
+  const mcpReq = request.body as any;
 
-app.post("/api/search-flights", async (req: Request, res: Response) => {
-  try {
-    const params: SearchFlightParams = req.body;
-    if (!params.origin || !params.destination || !params.departDate) {
-      return res.status(400).json({ error: "필수 파라미터 누락" });
+  console.log("🔧 MCP 요청 내용:", mcpReq); 
+
+  if (mcpReq?.service === "flight_search" && mcpReq?.action === "invoke") {
+    try {
+      console.log("🔧 MCP Flight Search 요청 처리 중:", mcpReq.payload), new Date().toISOString();
+      const flightResult = await searchFlightsAmadeus(mcpReq.payload);
+      return reply.send({
+        messageId: mcpReq.messageId,
+        sessionId: mcpReq.sessionId,
+        service: "flight_search",
+        action: "result",
+        result: flightResult,
+        metadata: { source: "amadeus", queriedAt: new Date().toISOString() },
+      });
+    } catch (err) {
+      return reply.status(500).send({
+        messageId: mcpReq.messageId,
+        sessionId: mcpReq.sessionId,
+        service: "flight_search",
+        action: "result",
+        result: {},
+        error: { code: "SEARCH_FAILED", message: err instanceof Error ? err.message : String(err) },
+      });
     }
-    const result = await searchFlightsAmadeus(params);
-    res.json(result);
-  } catch (error) {
-    console.error("❌ 항공편 검색 실패:", error);
-    res.status(500).json({ error: "항공편 검색 실패", message: error instanceof Error ? error.message : "Unknown error" });
+  } else {
+    reply.status(400).send({ error: "Unsupported MCP service or action" });
   }
 });
 
-// 위치 검색 별도 구현 권장
-app.get("/api/locations", (_req, res) => {
-  res.json({ locations: [] });
+// 기존 Express 스타일 `/api/search-flights` 경로 복원
+app.post("/api/search-flights", async (request, reply) => {
+  console.log("🔧 /api/search-flights, 항공편 검색 요청 수신:", request.body, new Date().toISOString());
+  
+  const params = request.body as SearchFlightParams;
+
+  if (!params.origin || !params.destination || !params.departDate) {
+    return reply.status(400).send({ error: "필수 파라미터 누락" });
+  }
+
+  try {
+    const result = await searchFlightsAmadeus(params);
+    reply.send(result);
+  } catch (err) {
+    reply.status(500).send({ error: "항공편 검색 실패", message: err instanceof Error ? err.message : String(err) });
+  }
 });
 
-app.listen(PORT, () => {
-  console.log("=".repeat(50));
-  console.log(`🚀 Amadeus Flight Server 시작됨 - http://localhost:${PORT}`);
-  console.log("=".repeat(50));
+app.get("/health", (_request, reply) => {
+  reply.send({
+    status: "ok",
+    service: "mcp-flight-server",
+    timestamp: new Date().toISOString(),
+    clientIdConfigured: !!AMADEUS_CLIENT_ID,
+  });
+});
+
+app.listen({ port: PORT }).then(() => {
+  console.log(`🚀 MCP Flight Server listening on http://localhost:${PORT}`);
 });
