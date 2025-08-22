@@ -1,166 +1,217 @@
-# MCP Flight Server
+# Conversational Flight Search
 
----
+AI-powered flight search service with natural language processing, built with microservices architecture.
 
-## 🚀 Project Overview
+## Overview
 
-MCP Flight Server is a message-based communication protocol (MCP) driven flight search server.  
-It accepts client requests via natural language or API calls, converts them into MCP protocol messages, and integrates with the Amadeus flight search API to provide real-time flight information.  
-Built with Fastify and TypeScript, it emphasizes performance, type safety, and maintainability.
+A two-tier system that enables users to search flights through natural conversation:
+- **API Gateway** - Handles chat interactions, understands natural language using LLM (OpenAI/Anthropic)
+- **MCP Flight Server** - Integrates with Amadeus GDS for real-time flight data
 
----
+## Architecture
 
-## 🏗️ Architecture & Main Flow
+```
+User → [/chat] → API Gateway (:8787) → [MCP Protocol] → Flight Server (:8700) → Amadeus API
+                       ↓                                         
+                  OpenAI/Claude                              
+```
 
-| Component        | Role                                                      |
-|------------------|-----------------------------------------------------------|
-| Client / Frontend| Sends requests via REST or natural language               |
-| API Gateway      | Handles client requests and converts them into MCP format |
-| MCP Server       | Fastify-based server processing MCP messages              |
-| FlightSearchAdapter | Wraps Amadeus API calls for flight offer retrieval       |
-| Amadeus API      | External flight offers search API                          |
+## Quick Start
 
-Requests flow from Client → API Gateway → MCP Server → Amadeus API  
-Responses return in reverse order.
+### Prerequisites
+- Node.js 18+
+- Amadeus API credentials ([Register here](https://developers.amadeus.com))
+- OpenAI or Anthropic API key
 
----
+### Installation
 
-## 🧰 Tech Stack
+1. **Clone and install dependencies**
+```bash
+# Clone repository
+git clone <your-repo-url>
+cd <project-root>
 
-| Category           | Technologies & Libraries                 | Description                      |
-|--------------------|----------------------------------------|---------------------------------|
-| Language           | TypeScript                             | Strong typing and modern JS      |
-| Server Framework   | Fastify                               | High-performance Node.js server  |
-| API Gateway        | Express.js                           | Client-facing API routing        |
-| Communication      | HTTP, REST, MCP Protocol              | Async message-based communication|
-| Authentication     | OAuth 2.0 (Amadeus API)               | Secure API token management      |
-| Validation         | Zod                                  | Runtime data & type validation   |
-| Build & Dev Tools  | tsup, tsx                            | TypeScript bundling and watch    |
-| Environment Vars   | dotenv                               | Secure environment variable management |
-| Testing & Debug    | Node.js built-in, Fastify logging     | Monitoring and debugging support |
+# Install Flight Server
+cd mcp-flight-server
+npm install
+cp .env.example .env  # Add Amadeus credentials
 
----
+# Install API Gateway
+cd ../api-gateway
+npm install
+cp .env.example .env  # Add LLM API keys
+```
 
-## 🔧 Key Features & Components
+2. **Configure environment variables**
 
-- **MCP Message Input/Output**: Defined with TypeScript types and Zod schemas for validation  
-- **Amadeus API Integration**: Handles OAuth token management and flight search API calls  
-- **Adapter Pattern**: Encapsulates service-specific external API interactions  
-- **Fastify-based MCP Server**: Efficient HTTP server for MCP messaging  
-- **Legacy Express `/api/search-flights` Endpoint**: Maintained for API Gateway compatibility  
-- **Health Check Endpoint**: `/health` for server status monitoring  
+**mcp-flight-server/.env**
+```env
+AMADEUS_CLIENT_ID=your_amadeus_client_id
+AMADEUS_CLIENT_SECRET=your_amadeus_client_secret
+PORT=8700
+```
 
----
+**api-gateway/.env**
+```env
+# Server
+PORT=8787
+FLIGHT_SERVER_URL=http://localhost:8700
 
-## ⚙️ Setup & Run Instructions
+# LLM Provider (choose one)
+LLM_PROVIDER=openai  # or anthropic
 
-1. Clone the repo:
+# OpenAI
+OPENAI_API_KEY=your_openai_key
+OPENAI_MODEL=gpt-4o-mini
 
-    ```
-    git clone https://github.com/yourusername/yourrepo.git
-    cd yourrepo
-    ```
+# OR Anthropic
+ANTHROPIC_API_KEY=your_anthropic_key
+ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
+```
 
-2. Install dependencies:
+3. **Start services**
+```bash
+# Terminal 1: Start Flight Server
+cd mcp-flight-server
+npm run dev
 
-    ```
-    npm install
-    ```
+# Terminal 2: Start API Gateway
+cd api-gateway
+npm run dev
+```
 
-3. Create `.env` file in root and add:
+## Usage
 
-    ```
-    AMADEUS_CLIENT_ID=your_amadeus_client_id
-    AMADEUS_CLIENT_SECRET=your_amadeus_client_secret
-    PORT=8787
-    ```
+### Chat with the Assistant
 
-4. Start development server with hot reload:
+**POST** `http://localhost:8787/chat`
 
-    ```
-    npm run dev
-    ```
+```bash
+curl -X POST http://localhost:8787/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Find me flights from Seoul to New York next Monday"
+      }
+    ]
+  }'
+```
 
-5. Build and run production server:
+**Response:**
+```json
+{
+  "message": "I found 15 flights from ICN to JFK. The cheapest option is $890 with one stop...",
+  "flights": {
+    "currency": "USD",
+    "items": [...]
+  },
+  "cards": [
+    {"title": "Local Food", "summary": "Must-try NYC dishes..."},
+    {"title": "Top Attractions", "summary": "Empire State, Central Park..."},
+    {"title": "Travel Tips", "summary": "NYC subway guide..."}
+  ]
+}
+```
 
-    ```
-    npm run build
-    npm start
-    ```
+### Direct Flight Search
 
----
+**POST** `http://localhost:8787/search-flights`
 
-## 📡 API Usage Examples
+```json
+{
+  "origin": "ICN",
+  "destination": "JFK",
+  "departDate": "2025-03-15",
+  "returnDate": "2025-03-22",
+  "adults": 2,
+  "currency": "USD"
+}
+```
 
-| API Type                     | Command Example                                           |
-|------------------------------|----------------------------------------------------------|
-| MCP Server `/mcp` POST call   | ```
-|                              | curl -X POST http://localhost:8787/mcp \\                |
-|                              | -H "Content-Type: application/json" \\                   |
-|                              | -d '{                                                    |
-|                              |   "messageId":"uuid-1234",                               |
-|                              |   "sessionId":"session-abc",                             |
-|                              |   "service":"flight_search",                             |
-|                              |   "action":"invoke",                                     |
-|                              |   "payload": {                                          |
-|                              |     "origin": "ICN",                                    |
-|                              |     "destination": "JFK",                               |
-|                              |     "departDate": "2025-09-01",                         |
-|                              |     "returnDate": "2025-09-10",                         |
-|                              |     "adults": 1,                                        |
-|                              |     "currency": "USD"                                   |
-|                              |   }                                                     |
-|                              | }'                                                      |
-|                              | ```                                                     |
-| Express API Gateway `/api/search-flights` | ```
-|                              | curl -X POST http://localhost:8700/api/search-flights \\ |
-|                              | -H "Content-Type: application/json" \\                   |
-|                              | -d '{                                                    |
-|                              |   "origin": "ICN",                                      |
-|                              |   "destination": "JFK",                                 |
-|                              |   "departDate": "2025-09-01",                           |
-|                              |   "returnDate": "2025-09-10",                           |
-|                              |   "adults": 1,                                          |
-|                              |   "currency": "USD"                                     |
-|                              | }'                                                      |
-|                              | ```                                                     |
+## API Endpoints
 
----
+### API Gateway (Port 8787)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/chat` | POST | Natural language flight search |
+| `/search-flights` | POST | Direct flight search |
+| `/locations` | GET | IATA code lookup |
+| `/health` | GET | Service health check |
 
-## 📁 Project Structure
+### Flight Server (Port 8700)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/mcp` | POST | MCP protocol handler |
+| `/api/search-flights` | POST | REST API (legacy) |
+| `/health` | GET | Service health check |
 
-| Folder                | Description                           |
-|-----------------------|-------------------------------------|
-| `src/mcp/`            | MCP server logic and adapters        |
-| `src/mcp/adapters/`   | External API adapters (e.g. Amadeus) |
-| `src/mcp/types.ts`    | TypeScript types for MCP & Amadeus   |
-| `src/mcp/schema.ts`   | Zod schemas for runtime validation   |
-| `src/api-gateway/`    | Express-based API Gateway             |
-| `src/config/`         | Configuration files and env management|
+## Tech Stack
 
----
+| Component | Technology |
+|-----------|------------|
+| Runtime | Node.js 18+ |
+| Framework | Fastify 5 |
+| Language | TypeScript 5.9 |
+| LLM | OpenAI GPT-4 / Anthropic Claude 3.5 |
+| GDS | Amadeus Test API |
+| Validation | Zod |
+| Protocol | MCP (Message Communication Protocol) |
 
-## 🔗 Useful Links
+## Project Structure
 
-- [Amadeus Flight Offers API](https://developers.amadeus.com/self-service/category/flights/api-doc/flight-offers-search)  
-- [Fastify Documentation](https://www.fastify.io/docs/latest/)  
-- [Zod Validation Library](https://zod.dev/)  
-- [OAuth 2.0 Overview](https://oauth.net/2/)  
+```
+.
+├── api-gateway/
+│   └── src/
+│       ├── index.ts        # Main gateway server
+│       ├── llm.ts          # LLM integration
+│       ├── mcpClient.ts    # MCP client
+│       └── types.ts        # TypeScript types
+│
+└── mcp-flight-server/
+    └── src/
+        ├── index.ts        # Flight server with Amadeus
+        ├── types.ts        # Type definitions
+        └── schema.ts       # Zod schemas
+```
 
----
+## Features
 
-## ⚠️ Important Notes
+- **Natural Language Processing** - Understands conversational queries
+- **Smart Intent Detection** - Extracts flight search parameters from text
+- **Travel Recommendations** - Generates destination info cards
+- **OAuth Token Management** - Automatic Amadeus token refresh
+- **Rate Limiting** - 100 requests/minute per client
+- **Type Safety** - Full TypeScript with runtime validation
 
-- Amadeus API keys may have rate limits and usage policies; verify your quota  
-- Keep `.env` and secrets secure to avoid leaks  
-- If MCP protocol changes, update MCP server and API Gateway accordingly  
+## Development
 
----
+```bash
+# Build for production
+npm run build
 
-## 📝 License
+# Start production server
+npm start
 
-MIT © Wonyoung Choi
+# Type checking
+npx tsc --noEmit
+```
 
----
+## Troubleshooting
 
-*This project implements a scalable MCP protocol based real-time flight search service with clean architecture for extensibility and maintainability.*
+| Issue | Solution |
+|-------|----------|
+| "AMADEUS_CLIENT_ID not set" | Add Amadeus credentials to `.env` |
+| "LLM provider not configured" | Set OpenAI or Anthropic API key |
+| No flight results | Check IATA codes and date format (YYYY-MM-DD) |
+| Connection refused | Ensure both servers are running |
+
+## License
+
+MIT
+
+## Author
+
+Wonyoung Choi
