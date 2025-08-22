@@ -17,7 +17,7 @@ export async function chat(messages: ChatMessage[]): Promise<string> {
   const systemMessage = messages.find((m) => m.role === "system");
   const conversationMessages = messages.filter((m) => m.role !== "system");
 
-  console.log(`🤖 LLM 호출 (${PROVIDER})`);
+  console.log(`🤖 LLM 호출 (${PROVIDER})`, new Date().toISOString);
 
   try {
     if (PROVIDER === "anthropic" && anthropic) {
@@ -47,7 +47,7 @@ export async function chat(messages: ChatMessage[]): Promise<string> {
       });
 
       const text = response.choices[0]?.message?.content || "";
-      console.log(`✅ GPT 응답 받음 (${text.length}자)`);
+      console.log(`✅ GPT 응답 받음 (${text.length}자)`, new Date().toISOString());
       return text;
     } else {
       throw new Error(`LLM 프로바이더가 설정되지 않았습니다. (현재: ${PROVIDER})`);

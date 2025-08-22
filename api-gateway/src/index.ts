@@ -121,8 +121,8 @@ You are a travel assistant. Analyze the user's message and determine their inten
 If they want to search for flights, extract the following information and return ONLY a JSON object:
 {
   "intent": "search_flights",
-  "origin": "IATA code or city name",
-  "destination": "IATA code or city name",
+  "origin": "IATA code",
+  "destination": "IATA code",
   "departDate": "YYYY-MM-DD",
   "returnDate": "YYYY-MM-DD" (optional for round trips),
   "round": true/false,
